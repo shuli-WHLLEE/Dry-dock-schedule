@@ -100,8 +100,8 @@
         // --- Raw CSV Data (Seeding) ---
         // Note: Using template literal for multiline string
         const RAW_CSV_DATA = `NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,SD預排入塢計畫,,,,,船廠,生活區裝修,scrubber加裝,LOGO,REMARK
-1,WH326,璀春,2026/3/4,1.特檢,28,姚洪香,V,2026/1/5,~,2026/1/29,25,days,廣東中遠,V,V,V,5/8:企劃 配合2026春節調整修期.
-2,WH176,卓春,2026/3/25,2.特檢,26,張簡志鈞,V,2026/1/13,~,2026/2/5,24,days,蛇口友聯,,V,V,
+1,WH326,璀春,2026/3/4,1.特檢,28,姚洪香,V,2026/1/1,~,2026/1/28,28,days,廣東中遠,V,V,V,5/8:企劃 配合2026春節調整修期.
+2,WH176,卓春,2026/3/25,2.特檢,26,張簡志鈞,V,2026/1/12,~,2026/2/6,26,days,蛇口友聯,,V,V,
 3,WH611,冠春,2026/3/16,5.特檢,33,鄧健雄,V,2026/2/25,~,2026/3/29,33,days,青島北海,,,V,2025/11/10變更修期2026/2/18+40天
 4,WH627,絳春,2026/4/23,4.特檢,24,蕭應龍,V,2026/2/25,~,2026/3/20,24,days,華潤大東,,,V,2025/11/10變更修期2026/2/18+30天
 5,WH516,新春,2026/3/28,3.中檢,16,周 進,V,2026/2/25,~,2026/3/12,16,days,廣東中遠,V,,V,
@@ -337,7 +337,29 @@
 
           const handleUpdate = async (id, field, value) => {
             const docRef = doc(db, "dry_dock_schedules", id);
-            await updateDoc(docRef, { [field]: value });
+            const updates = { [field]: value };
+
+            // Auto-calculate days if dates change
+            if (field === 'plannedPeriodStart' || field === 'plannedPeriodEnd') {
+                const ship = schedules.find(s => s.id === id);
+                if (ship) {
+                    const startDate = field === 'plannedPeriodStart' ? value : ship.plannedPeriodStart;
+                    const endDate = field === 'plannedPeriodEnd' ? value : ship.plannedPeriodEnd;
+                    
+                    if (startDate && endDate) {
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        const diffTime = end - start;
+                        // Calculate days (inclusive)
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                        if (!isNaN(diffDays)) {
+                            updates.days = diffDays;
+                        }
+                    }
+                }
+            }
+
+            await updateDoc(docRef, updates);
           };
 
           const isModified = (item, field) => {
