@@ -1,0 +1,574 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  setDoc,
+  query
+} from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { Lock, Unlock, Anchor, RotateCcw, X, Info, Hammer, Wind, Ship, Edit3 } from 'lucide-react';
+
+// --- (1) Firebase Configuration ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBjnlDmMoXLXfmfT0cx8Uys_lE98GE1G0s",
+  authDomain: "dry-dock-schedule.firebaseapp.com",
+  projectId: "dry-dock-schedule",
+  storageBucket: "dry-dock-schedule.firebasestorage.app",
+  messagingSenderId: "443381055158",
+  appId: "1:443381055158:web:023f6b3db6f23a8f19f017",
+  measurementId: "G-LPN336T7SN"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// Shipyard Options
+const SHIPYARDS = [
+  "廣東中遠",
+  "蛇口友聯",
+  "青島北海",
+  "華潤大東",
+  "文沖",
+  "浙江友聯",
+  "舟山中遠",
+  "TBD (待定)"
+];
+
+// --- Raw CSV Data (Seeding) ---
+const RAW_CSV_DATA = `NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,SD預排入塢計畫,,,,,船廠,生活區裝修,scrubber加裝,LOGO,REMARK
+1,WH326,璀春,2026/3/4,1.特檢,28,姚洪香,V,2026/1/5,~,2026/1/29,28,days,廣東中遠,V,V,V,5/8:企劃 配合2026春節調整修期.
+2,WH176,卓春,2026/3/25,2.特檢,26,張簡志鈞,V,2026/1/13,~,2026/2/5,26,days,蛇口友聯,,V,V,
+3,WH611,冠春,2026/3/16,5.特檢,33,鄧健雄,V,2026/2/25,~,2026/3/29,33,days,青島北海,,,V,2025/11/10變更修期2026/2/18+40天
+4,WH627,絳春,2026/4/23,4.特檢,24,蕭應龍,V,2026/2/25,~,2026/3/20,24,days,華潤大東,,,V,2025/11/10變更修期2026/2/18+30天
+5,WH516,新春,2026/3/28,3.中檢,16,周 進,V,2026/2/25,~,2026/3/12,16,days,廣東中遠,V,,V,
+6,WH327,璨春,2026/3/25,1.特檢,28,蕭應龍,N,2026/2/27,~,2026/3/26,28,days,廣東中遠,V,V,V,5/8:企劃 配合2026春節調整修期.
+7,WH278,逸春,2026/4/7,1.特檢,14,陳國勝,V,2026/2/28,~,2026/3/13,14,days,文沖,,,V,
+8,WH612,群春,2026/9/24,5.特檢,33,劉哲宇,V,2026/3/9,~,2026/4/10,33,days,青島北海,,,V,12/31:企劃變更進廠日.
+9,WH285,桂春,2026/4/30,1.特檢,14,台東潤,V,2026/3/15,~,2026/3/28,14,days,文沖,V,,V,
+10,WH517,局春,2026/6/1,3.中檢,16,劉建國,V,2026/3/24,~,2026/4/8,16,days,青島北海,V,,V,2025/11/10變更修期2026/2/18+33天
+11,WH313,富春,2026/4/20,4.特檢,24,劉外生,V,2026/3/26,~,2026/4/18,24,days,廣東中遠,,,V,313/315其中一船做X7防污漆
+12,WH328,亮春,2026/5/13,1.特檢,14,丁招勇,M,2026/4/3,~,2026/4/16,14,days,廣東中遠,V,,V,5/8:企劃 配合2026春節調整修期.
+13,WH286,騰春,2026/5/15,1.特檢,14,劉外生,V,2026/4/5,~,2026/4/18,14,days,廣東中遠,V,,V,
+14,WH329,麗春,2026/5/27,1.特檢,14,陳敏薇,V,2026/4/20,~,2026/5/3,14,days,廣東中遠,V,,V,5/8:企劃 配合2026春節調整修期.
+15,WH287,芳春,2026/7/5,1.特檢,14,藍志達,V,2026/4/22,~,2026/5/5,14,days,廣東中遠,V,,V,
+16,WH288,源春,2026/8/1,1.特檢,14,黃怡仁,V,2026/5/16,~,2026/5/29,14,days,廣東中遠,V,,V,
+17,WH613,倫春,2026/9/27,5.特檢,33,陳啟豪,V,2026/5/28,~,2026/6/29,33,days,浙江友聯,,,V,12/31:企劃變更進廠日.
+18,WH289,昌春,2026/9/29,1.特檢,14,盛利寧,N,2026/7/1,~,2026/7/14,14,days,文沖,V,,V,
+19,WH315,貴春,2026/9/15,4.特檢,24,周 進,V,2026/7/3,~,2026/7/26,24,days,廣東中遠,,,V,313/315其中一船做X7防污漆
+20,WH626,紫春,2026/9/5,4.特檢,24,卓錦成,V,2026/7/15,~,2026/8/7,24,days,舟山中遠,,,V,
+21,WH276,越春,2026/9/11,2.中檢,14,陳國勝,V,2026/7/29,~,2026/8/11,14,days,文沖,,,V,
+22,WH271,百春,2026/10/13,3.特檢,21,鄧健雄,V,2026/8/15,~,2026/9/4,21,days,蛇口友聯,V,,V,
+23,WHV01,雍春,2026/10/14,2.中檢,30,羅國治,M,2026/9/15,~,2026/10/14,30,days,浙江友聯,,V,V,
+24,WH290,安春,2026/10/28,1.特檢,14,周 進,V,2026/9/25,~,2026/10/8,14,days,廣東中遠,V,,V,
+25,WH272,年春,2026/12/15,3.特檢,21,林修宇,V,2026/10/10,~,2026/10/30,21,days,蛇口友聯,V,,V,
+26,WH291,穩春,2026/12/19,1.特檢,14,陳啟豪,V,2026/11/11,~,2026/11/24,14,days,廣東中遠,V,,V,
+27,WH292,承春,2027/2/22,1.特檢,14,陳家和,V,2026/11/28,~,2026/12/11,14,days,廣東中遠,V,,V,
+28,WH625,和春,2027/3/17,5.中檢,31,張簡志鈞,V,2026/12/4,~,2027/1/3,31,days,舟山中遠,,,V,
+29,WH273,基春,2027/2/14,3.特檢,21,陳逸銘,M,2026/12/19,~,2027/1/8,21,days,蛇口友聯,,,V,
+30,WH171,興春,2027/3/12,4.中檢,21,丁招勇,N,2027/1/14,~,2027/2/3,21,days,廣東中遠,V,,V,
+31,WH293,恩春,2027/3/30,1.特檢,14,劉哲宇,V,2027/2/20,~,2027/3/5,14,days,廣東中遠,V,,V,
+32,WH172,運春,2027/4/18,4.中檢,21,陳家和,V,2027/3/15,~,2027/4/4,21,days,蛇口友聯,V,,V,
+33,WH721,誠春,2027/4/24,4.中檢,30,陳邦偉,,2027/2/11,~,2027/3/12,30,days,浙江友聯,V,V,V,
+34,WH722,信春,2027/5/3,4.中檢,30,藍志達,,2027/2/11,~,2027/3/12,30,days,青島北海,V,V,V,
+35,WH522,瑞春,2027/5/8,4.中檢,24,黃怡仁,,2027/2/22,~,2027/3/17,24,days,青島北海,,,V,
+36,WH621,麟春,2027/5/24,4.中檢,23,藍志達,,2027/3/24,~,2027/4/15,23,days,青島北海,,,V,
+37,WH723,隆春,2027/5/29,4.中檢,30,鄧健雄,,2027/4/8,~,2027/5/7,30,days,青島北海,V,V,V,`;
+
+// --- Helper Functions ---
+const parseDate = (dateStr) => {
+  if (!dateStr) return "";
+  const parts = dateStr.trim().split('/');
+  if (parts.length === 3) {
+    const y = parts[0];
+    const m = parts[1].padStart(2, '0');
+    const d = parts[2].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return dateStr; 
+};
+
+const parseCSV = () => {
+  const lines = RAW_CSV_DATA.split('\n').filter(l => l.trim().length > 0);
+  const data = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(',');
+    if (row.length < 5) continue;
+    const no = row[0];
+    const item = {
+      id: `ship_${no}`,
+      no,
+      vesselName: row[1],
+      chName: row[2],
+      dockDue: row[3],
+      survey: row[4],
+      days: row[5],
+      pic: row[6],
+      plannedPeriodStart: parseDate(row[8]),
+      plannedPeriodEnd: parseDate(row[10]),
+      shipyard: row[13] ? row[13].trim() : "TBD (待定)",
+      renovation: row[14],
+      scrubber: row[15],
+      logo: row[16],
+      remark: row.slice(17).join(',').replace(/"/g, ''),
+      original: {
+        plannedPeriodStart: parseDate(row[8]),
+        plannedPeriodEnd: parseDate(row[10]),
+        shipyard: row[13] ? row[13].trim() : "TBD (待定)",
+        renovation: row[14],
+        scrubber: row[15],
+        logo: row[16],
+      }
+    };
+    data.push(item);
+  }
+  return data;
+};
+
+const SEED_DATA = parseCSV();
+
+// --- Modal Component ---
+const PasswordModal = ({ isOpen, onClose, onSuccess }) => {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (password === "wanhai888") {
+      onSuccess();
+      onClose();
+      setPassword("");
+      setError(false);
+    } else {
+      setError(true);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-80">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-gray-800">輸入管理員密碼</h3>
+          <button onClick={onClose}><X size={20} className="text-gray-500" /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="password"
+            className="w-full border border-gray-300 p-2 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="請輸入密碼"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+          />
+          {error && <p className="text-red-500 text-sm mb-2">密碼錯誤，請重試。</p>}
+          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors">確認解鎖</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- Stat Card Component ---
+const StatCard = ({ icon: Icon, label, value, sub, colorClass, bgClass }) => (
+  <div className={`flex items-center gap-4 p-4 rounded-xl shadow-sm border border-slate-100 bg-white`}>
+    <div className={`p-3 rounded-full ${bgClass} ${colorClass}`}>
+      <Icon size={24} />
+    </div>
+    <div>
+      <p className="text-xs text-slate-500 font-medium mb-1">{label}</p>
+      <div className="flex items-baseline gap-1">
+        <span className={`text-2xl font-extrabold ${colorClass}`}>{value}</span>
+        <span className="text-xs text-slate-400 font-medium">{sub}</span>
+      </div>
+    </div>
+  </div>
+);
+
+// --- Table Icon Cell Component (With Edit Toggle) ---
+const FeatureCell = ({ active, icon: Icon, colorClass, isLocked, onClick }) => {
+  const isActive = active === 'V';
+  
+  if (isLocked) {
+    return (
+      <div className="flex justify-center h-8 items-center">
+        {isActive ? <Icon className={colorClass} size={20} strokeWidth={2.5} /> : <span className="text-slate-200">-</span>}
+      </div>
+    );
+  }
+
+  // Edit Mode Toggle Button
+  return (
+    <div className="flex justify-center h-8 items-center">
+      <button 
+        onClick={onClick}
+        className={`p-2 rounded-lg transition-all duration-200 border-2 ${
+          isActive 
+            ? `bg-white ${colorClass.replace('text-', 'border-')} shadow-sm` 
+            : 'bg-slate-50 border-slate-200 text-slate-300 hover:border-slate-300'
+        }`}
+        title="點擊切換狀態"
+      >
+        <Icon 
+          className={isActive ? colorClass : "text-slate-300"} 
+          size={18} 
+          strokeWidth={isActive ? 2.5 : 2} 
+        />
+      </button>
+    </div>
+  );
+};
+
+export default function DryDockScheduleApp() {
+  const [user, setUser] = useState(null);
+  const [schedules, setSchedules] = useState([]);
+  const [isLocked, setIsLocked] = useState(true);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) signInAnonymously(auth).catch(console.error);
+    });
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "dry_dock_schedules"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // (1) Filter out legacy demo ships
+      const LEGACY_SHIPS = ["EVER GIVEN", "EVER GREET", "EVER GLOBE"];
+      data = data.filter(item => !LEGACY_SHIPS.includes(item.vesselName));
+
+      // (3) Sorting Logic: Date ASC, then original No
+      data.sort((a, b) => {
+        const dateA = a.plannedPeriodStart || "9999-12-31"; 
+        const dateB = b.plannedPeriodStart || "9999-12-31";
+        
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
+        return (parseInt(a.no) || 0) - (parseInt(b.no) || 0);
+      });
+
+      if (data.length === 0 && !loading) {
+        SEED_DATA.forEach(async (item) => await setDoc(doc(db, "dry_dock_schedules", item.id), item));
+      } else {
+        setSchedules(data);
+      }
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleUpdate = async (id, field, value) => {
+    const docRef = doc(db, "dry_dock_schedules", id);
+    await updateDoc(docRef, { [field]: value });
+  };
+
+  const isModified = (item, field) => {
+    if (!item.original) return false;
+    return item[field] !== item.original[field];
+  };
+
+  const getStyle = (item, field, baseStyle = "") => {
+    if (isModified(item, field)) return `text-red-600 font-bold bg-yellow-200 border-red-400 ${baseStyle}`;
+    return baseStyle;
+  };
+
+  const handleReset = async (item) => {
+    if (!item.original) return;
+    const docRef = doc(db, "dry_dock_schedules", item.id);
+    await updateDoc(docRef, {
+      shipyard: item.original.shipyard,
+      plannedPeriodStart: item.original.plannedPeriodStart,
+      plannedPeriodEnd: item.original.plannedPeriodEnd,
+      renovation: item.original.renovation,
+      scrubber: item.original.scrubber,
+      logo: item.original.logo
+    });
+  };
+
+  const stats = useMemo(() => {
+    const total = schedules.length;
+    const reno = schedules.filter(s => s.renovation === 'V').length;
+    const scrub = schedules.filter(s => s.scrubber === 'V').length;
+    const logo = schedules.filter(s => s.logo === 'V').length;
+    return { total, reno, scrub, logo };
+  }, [schedules]);
+
+  if (loading) return <div className="p-10 text-center text-gray-500">正在讀取雲端資料庫...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-2 md:p-6 font-sans text-sm">
+      <PasswordModal 
+        isOpen={showPasswordModal} 
+        onClose={() => setShowPasswordModal(false)}
+        onSuccess={() => setIsLocked(false)}
+      />
+
+      <div className="max-w-[1400px] mx-auto space-y-6">
+        
+        {/* Top Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-center bg-slate-800 text-white p-6 rounded-2xl shadow-lg">
+          <div className="flex items-center gap-4">
+             <div className="p-3 bg-white/10 rounded-xl">
+               <Anchor className="h-8 w-8 text-blue-400" />
+             </div>
+             <div>
+               <h1 className="text-2xl font-bold tracking-wider">2026 年度船舶塢修總表</h1>
+               <p className="text-slate-400 text-xs mt-1">即時協作系統 • Google Firestore Database</p>
+             </div>
+          </div>
+
+          <div className="flex items-center gap-4 mt-4 md:mt-0">
+             <div className="text-right hidden sm:block border-r border-slate-600 pr-4 mr-2">
+                <div className="text-[10px] uppercase text-slate-400 tracking-wider">Current Mode</div>
+                <div className={`text-sm font-bold flex items-center gap-2 ${isLocked ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {isLocked ? 'VIEW ONLY' : 'EDIT ENABLED'}
+                </div>
+             </div>
+             <button
+                onClick={() => isLocked ? setShowPasswordModal(true) : setIsLocked(true)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all font-bold shadow-lg ${
+                  isLocked 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                }`}
+              >
+                {isLocked ? <Lock size={18} /> : <Unlock size={18} />}
+                {isLocked ? "點擊解鎖" : "鎖定編輯"}
+              </button>
+          </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard 
+            icon={Ship} 
+            label="計畫修船數" 
+            value={stats.total} 
+            sub="艘" 
+            colorClass="text-blue-600" 
+            bgClass="bg-blue-100" 
+          />
+          <StatCard 
+            icon={Anchor} 
+            label="換新 LOGO" 
+            value={stats.logo} 
+            sub="艘" 
+            colorClass="text-emerald-600" 
+            bgClass="bg-emerald-100" 
+          />
+          <StatCard 
+            icon={Hammer} 
+            label="生活區裝修" 
+            value={stats.reno} 
+            sub="艘" 
+            colorClass="text-purple-600" 
+            bgClass="bg-purple-100" 
+          />
+          <StatCard 
+            icon={Wind} 
+            label="加裝 Scrubber" 
+            value={stats.scrub} 
+            sub="艘" 
+            colorClass="text-orange-600" 
+            bgClass="bg-orange-100" 
+          />
+        </div>
+
+        {/* Legend */}
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between text-xs">
+           <div className="flex gap-4">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-red-500 rounded-sm"></span> 特檢 (SS)</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-blue-500 rounded-sm"></span> 中檢 (IS)</span>
+           </div>
+           
+           <div className="flex items-center gap-2 bg-yellow-50 text-yellow-800 px-3 py-1.5 rounded-lg border border-yellow-100">
+             <Info size={14} className="text-yellow-600"/>
+             <span className="font-medium">編輯提示：黃底紅字代表資料與原始計畫不同</span>
+           </div>
+        </div>
+
+        {/* Main Table */}
+        <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-slate-200">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[1200px]">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-200 h-12">
+                  <th className="px-4 text-center w-14">No.</th>
+                  <th className="px-4 w-36">船名 (Vessel)</th>
+                  <th className="px-4 w-24">PIC</th>
+                  <th className="px-4 w-28">Due Date</th>
+                  <th className="px-4 w-24">Survey</th>
+                  <th className="px-4 text-center w-64 bg-slate-100/50">預排修期 (Range)</th>
+                  <th className="px-4 text-center w-16">天數</th>
+                  <th className="px-4 w-40">船廠 (Shipyard)</th>
+                  
+                  {/* (2) Text Headers instead of Icons */}
+                  <th className="px-2 text-center w-24 text-xs font-bold text-purple-700">生活區裝修</th>
+                  <th className="px-2 text-center w-24 text-xs font-bold text-orange-700">加裝 Scrubber</th>
+                  <th className="px-2 text-center w-24 text-xs font-bold text-emerald-700">換新 LOGO</th>
+                  
+                  <th className="px-4 min-w-[200px]">備註 (Remark)</th>
+                  {!isLocked && <th className="px-4 text-center w-12">Reset</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {schedules.map((ship, index) => (
+                  <tr key={ship.id} className="hover:bg-slate-50/80 transition-colors h-16 group">
+                    {/* (3) Dynamic No. based on sorted index */}
+                    <td className="px-4 text-center font-mono text-slate-400 font-medium">{index + 1}</td>
+                    
+                    <td className="px-4">
+                      <div className="font-bold text-slate-800 text-base">{ship.vesselName}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{ship.chName}</div>
+                    </td>
+
+                    <td className="px-4 text-slate-600 font-medium">{ship.pic}</td>
+
+                    <td className="px-4 text-red-600 font-bold font-mono tracking-tight">{ship.dockDue}</td>
+
+                    <td className="px-4">
+                       <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
+                        ship.survey.includes('特檢') 
+                          ? 'text-red-700 bg-red-50 border-red-100' 
+                          : 'text-blue-700 bg-blue-50 border-blue-100'
+                      }`}>
+                        {ship.survey}
+                      </span>
+                    </td>
+
+                    <td className="px-4 bg-slate-50/30">
+                      <div className="flex items-center gap-1.5 justify-center">
+                        {isLocked ? (
+                          <div className={`px-2 py-1 rounded ${getStyle(ship, 'plannedPeriodStart', 'text-slate-700 font-medium')}`}>
+                             {ship.plannedPeriodStart || '-'}
+                          </div>
+                        ) : (
+                          <input 
+                            type="date"
+                            value={ship.plannedPeriodStart}
+                            onChange={(e) => handleUpdate(ship.id, 'plannedPeriodStart', e.target.value)}
+                            className={`w-32 px-2 py-1 border rounded text-xs focus:ring-2 focus:ring-blue-400 outline-none transition-shadow ${getStyle(ship, 'plannedPeriodStart')}`}
+                          />
+                        )}
+                        <span className="text-slate-300">➜</span>
+                        {isLocked ? (
+                          <div className={`px-2 py-1 rounded ${getStyle(ship, 'plannedPeriodEnd', 'text-slate-700 font-medium')}`}>
+                             {ship.plannedPeriodEnd || '-'}
+                          </div>
+                        ) : (
+                          <input 
+                            type="date"
+                            value={ship.plannedPeriodEnd}
+                            onChange={(e) => handleUpdate(ship.id, 'plannedPeriodEnd', e.target.value)}
+                            className={`w-32 px-2 py-1 border rounded text-xs focus:ring-2 focus:ring-blue-400 outline-none transition-shadow ${getStyle(ship, 'plannedPeriodEnd')}`}
+                          />
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-4 text-center font-bold text-slate-700 text-base">{ship.days}</td>
+
+                    <td className="px-4">
+                      {isLocked ? (
+                        <span className={`inline-block px-2.5 py-1 rounded-md font-medium text-xs ${getStyle(ship, 'shipyard', 
+                          ship.shipyard.includes('中遠') ? 'text-blue-800 bg-blue-50 border border-blue-100' : 
+                          ship.shipyard.includes('友聯') ? 'text-amber-800 bg-amber-50 border border-amber-100' : 'text-slate-600 bg-slate-100'
+                        )}`}>
+                          {ship.shipyard}
+                        </span>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            value={ship.shipyard}
+                            onChange={(e) => handleUpdate(ship.id, 'shipyard', e.target.value)}
+                            className={`w-full px-2 py-1.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-400 outline-none text-xs bg-white appearance-none cursor-pointer ${getStyle(ship, 'shipyard')}`}
+                          >
+                            {SHIPYARDS.map(yard => (
+                              <option key={yard} value={yard}>{yard}</option>
+                            ))}
+                          </select>
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                             <Edit3 size={12} />
+                          </div>
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="px-2">
+                      <FeatureCell 
+                        active={ship.renovation} 
+                        icon={Hammer} 
+                        colorClass="text-purple-600" 
+                        isLocked={isLocked}
+                        onClick={() => handleUpdate(ship.id, 'renovation', ship.renovation === 'V' ? '' : 'V')}
+                      />
+                    </td>
+                    <td className="px-2">
+                      <FeatureCell 
+                        active={ship.scrubber} 
+                        icon={Wind} 
+                        colorClass="text-orange-600" 
+                        isLocked={isLocked}
+                        onClick={() => handleUpdate(ship.id, 'scrubber', ship.scrubber === 'V' ? '' : 'V')}
+                      />
+                    </td>
+                    <td className="px-2">
+                      <FeatureCell 
+                        active={ship.logo} 
+                        icon={Anchor} 
+                        colorClass="text-emerald-600" 
+                        isLocked={isLocked}
+                        onClick={() => handleUpdate(ship.id, 'logo', ship.logo === 'V' ? '' : 'V')}
+                      />
+                    </td>
+
+                    <td className="px-4">
+                      {ship.remark && (
+                        <div className="flex items-start gap-1.5 text-xs text-slate-500 bg-yellow-50/50 p-2 rounded-lg border border-yellow-100 max-w-[200px]">
+                           <Info size={14} className="text-yellow-500 flex-shrink-0 mt-0.5" />
+                           <span className="leading-snug">{ship.remark}</span>
+                        </div>
+                      )}
+                    </td>
+
+                    {!isLocked && (
+                      <td className="px-4 text-center">
+                        {(isModified(ship, 'shipyard') || isModified(ship, 'plannedPeriodStart') || isModified(ship, 'plannedPeriodEnd') || isModified(ship, 'renovation') || isModified(ship, 'scrubber') || isModified(ship, 'logo')) && (
+                          <button 
+                            onClick={() => handleReset(ship)}
+                            className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
+                            title="還原所有變更"
+                          >
+                            <RotateCcw size={16} />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="bg-slate-50 p-4 border-t text-center text-xs text-slate-400 flex justify-between items-center">
+            <span>System Status: <span className="text-emerald-500 font-bold">● Online</span></span>
+            <span>Last sync: {new Date().toLocaleTimeString()}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
