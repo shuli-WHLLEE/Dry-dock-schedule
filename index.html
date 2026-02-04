@@ -94,7 +94,7 @@ NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,Start,To,End,Duration,Unit,Fac
 17,WH315,貴春,2026/9/15,4.特檢,24,周 進,V,2026/7/3,~,2026/7/26,24,days,廣東中遠,,,V,313/315其中一船做X7防污漆
 18,WH626,紫春,2026/9/5,4.特檢,24,卓錦成,V,2026/7/15,~,2026/8/7,24,days,舟山中遠,,,V,
 19,WH276,越春,2026/9/11,2.中檢,26,陳國勝,V,2026/7/29,~,2026/8/11,14,days,文沖,,,V,
-20,WH612,群春,2026/9/24,5.特檢,33,劉哲宇,V,2026/8/12,~,2026/9/13,33,days,華豐,,,V,
+20,WH612,群春,2026/9/24,5.特檢,33,劉哲宇,V,2026/8/12,~,2026/9/13,33,days,舟山華豐,,,V,
 21,WH271,百春,2026/10/13,3.特檢,26,鄧健雄,V,2026/8/15,~,2026/9/4,21,days,蛇口友聯,V,,V,
 22,WH613,倫春,2026/9/27,5.特檢,33,陳啟豪,V,2026/8/23,~,2026/9/24,33,days,浙江友聯,,,V,
 23,WHV01,雍春,2026/10/14,2.中檢,30,羅國治,M,2026/9/15,~,2026/10/14,30,days,浙江友聯,,V,V,
@@ -592,7 +592,7 @@ NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,Start,To,End,Duration,Unit,Fac
                                                     <td className="px-4 py-3"><div className="font-bold text-slate-800">{row.name}</div><div className="text-xs text-slate-500">{row.chName}</div></td>
                                                     
                                                     {/* Factory */}
-                                                    <td className={`px-4 py-3 ${getChangeClass(row, 'factory')}`}><EditableCell value={row.factory} onChange={(val) => handleUpdate(row.id, { factory: val })} type="select" options={['廣東中遠', '蛇口友聯', '青島北海', '華潤大東', '浙江友聯', '華豐', '文沖', '舟山中遠', 'TBD']} /></td>
+                                                    <td className={`px-4 py-3 ${getChangeClass(row, 'factory')}`}><EditableCell value={row.factory} onChange={(val) => handleUpdate(row.id, { factory: val })} type="select" options={['廣東中遠', '蛇口友聯', '青島北海', '華潤大東', '浙江友聯', '舟山華豐', '文沖', '舟山中遠', 'TBD']} /></td>
                                                     
                                                     <td className="px-4 py-3 text-slate-700">{row.pic}</td>
                                                     <td className="px-4 py-3 text-red-600 font-bold">{row.dockDue}</td>
@@ -685,3 +685,4 @@ NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,Start,To,End,Duration,Unit,Fac
     </script>
 </body>
 </html>
+
