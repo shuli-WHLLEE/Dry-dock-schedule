@@ -10,17 +10,17 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, updateDoc, writeBatch, query, orderBy, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        
-        // 暴露給全域使用
-        window.firebaseModules = { 
-            initializeApp, getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
-            getFirestore, collection, doc, onSnapshot, updateDoc, writeBatch, query, orderBy, getDocs, setDoc 
-        };
-    </script>
+   <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, doc, onSnapshot, updateDoc, writeBatch, query, orderBy, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    
+    // 暴露給全域使用 (加入了 signInAnonymously 防止之前的代碼報錯)
+    window.firebaseModules = { 
+        initializeApp, getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously,
+        getFirestore, collection, doc, onSnapshot, updateDoc, writeBatch, query, orderBy, getDocs, setDoc 
+    };
+</script>
 
     <style>
         body { font-size: 14px; }
@@ -738,5 +738,6 @@ NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,Start,To,End,Duration,Unit,Fac
     </script>
 </body>
 </html>
+
 
 
