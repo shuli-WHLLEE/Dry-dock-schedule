@@ -358,15 +358,19 @@ NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,Start,To,End,Duration,Unit,Fac
                 return data;
             };
 
-            const handleUpdate = async (id, updates) => {
-                if (!db || !isEditable) return;
-                try {
-                    const docRef = doc(db, COLLECTION_NAME, id);
-                    await updateDoc(docRef, updates);
-                } catch (e) {
-                    console.error("Update failed", e);
-                }
-            };
+        const handleUpdate = async (id, updates) => {
+  if (!db || !isEditable) return;
+
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    await updateDoc(docRef, updates);
+    console.log("✅ Firestore update ok:", id);
+  } catch (e) {
+    console.error("❌ Firestore update failed:", e);
+    alert("資料尚未同步到雲端，請確認網路連線");
+    throw e;
+  }
+};
 
             const handleDateChange = (id, field, newVal) => {
                 // 1. Get current row data
@@ -685,3 +689,4 @@ NO.,NAME,船名,Docking Due,Survey,修期,PIC,AUD,Start,To,End,Duration,Unit,Fac
     </script>
 </body>
 </html>
+
